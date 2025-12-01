@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+.pytest_cache/
+*.py[cod]
+gamepricelens.db
+
+# Environment
+.env
+
+# Node
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
+# OS
+.DS_Store
