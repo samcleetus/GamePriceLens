@@ -1,5 +1,6 @@
 from datetime import datetime
 import json
+import re
 from typing import Dict, Iterable, List, Optional, Tuple
 
 from sqlalchemy import func
@@ -33,14 +34,16 @@ def list_games(db: Session) -> List[models.Game]:
     return db.query(models.Game).order_by(models.Game.created_at.desc()).all()
 
 
-def compute_game_summary(game: models.Game) -> schemas.GameSummary:
+def compute_game_summary(
+    game: models.Game, latest_prices: Optional[List[models.PriceSnapshot]] = None
+) -> schemas.GameSummary:
     best_price = None
     best_store = None
     last_updated = None
-    if game.price_snapshots:
-        latest = max(game.price_snapshots, key=lambda snap: snap.timestamp)
-        last_updated = latest.timestamp
-        best_snapshot = min(game.price_snapshots, key=lambda snap: snap.price)
+    prices = latest_prices if latest_prices is not None else list(game.price_snapshots)
+    if prices:
+        last_updated = max(prices, key=lambda snap: snap.timestamp).timestamp
+        best_snapshot = min(prices, key=lambda snap: snap.price)
         best_price = best_snapshot.price
         best_store = best_snapshot.store_name
     return schemas.GameSummary(
@@ -59,7 +62,11 @@ def compute_game_summary(game: models.Game) -> schemas.GameSummary:
 
 def get_games_with_summary(db: Session) -> List[schemas.GameSummary]:
     games = list_games(db)
-    return [compute_game_summary(game) for game in games]
+    summaries: List[schemas.GameSummary] = []
+    for game in games:
+        latest_prices = get_latest_prices_by_store(db, game.id)
+        summaries.append(compute_game_summary(game, latest_prices))
+    return summaries
 
 
 def get_latest_prices_by_store(db: Session, game_id: int) -> List[models.PriceSnapshot]:
@@ -125,6 +132,25 @@ def upsert_price_snapshots(
         count += 1
     db.commit()
     return count
+
+
+def normalize_store_names(db: Session, store_map: Dict[str, str]) -> int:
+    """Replace placeholder store names like 'Store 3' with real names when available."""
+    pattern = re.compile(r"Store\s+(\d+)$", re.IGNORECASE)
+    snapshots = db.query(models.PriceSnapshot).filter(models.PriceSnapshot.store_name.ilike("Store %")).all()
+    updated = 0
+    for snap in snapshots:
+        match = pattern.match(snap.store_name.strip())
+        if not match:
+            continue
+        store_id = match.group(1)
+        real_name = store_map.get(store_id)
+        if real_name and snap.store_name != real_name:
+            snap.store_name = real_name
+            updated += 1
+    if updated:
+        db.commit()
+    return updated
 
 
 def upsert_metadata(db: Session, game_id: int, metadata: Dict[str, Optional[object]]) -> models.GameMetadata:

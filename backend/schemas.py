@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class GameBase(BaseModel):
@@ -20,8 +20,7 @@ class GameRead(GameBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class GameSummary(GameRead):
@@ -37,8 +36,7 @@ class PriceSnapshotRead(BaseModel):
     currency: str
     timestamp: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PriceHistoryPoint(BaseModel):
@@ -51,8 +49,7 @@ class GameMetadataRead(BaseModel):
     tags: Optional[List[str]] = None
     last_scraped_at: Optional[datetime] = None
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class GameDetailResponse(BaseModel):
